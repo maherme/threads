@@ -1,5 +1,6 @@
 #include <pthread.h>
 #include <stdio.h>
+#include <assert.h>
 #include "threads.h"
 #include "queue.h"
 
@@ -29,6 +30,8 @@ prod_fn(void *arg)
         thread_cond_wait(&q->cv, &q->mutex);
         printf("%s: Wakes up, checking the queue status again\n", th_name);
     }
+
+    assert(is_queue_empty(q));
 
     while(!is_queue_full(q))
     {
@@ -61,6 +64,8 @@ cons_fn(void *arg)
         thread_cond_wait(&q->cv, &q->mutex);
         printf("%s: Wakes up, checking the queue status again\n", th_name);
     }
+
+    assert(is_queue_full(q));
 
     while(!is_queue_empty(q))
     {
