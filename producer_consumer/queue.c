@@ -1,8 +1,8 @@
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
 #include "queue.h"
+#include "threads.h"
 
 queue_t *
 init_queue(void)
@@ -11,8 +11,8 @@ init_queue(void)
 
     q->rear = 0;
     q->front = q->rear;
-    pthread_mutex_init(&q->mutex, NULL);
-    pthread_cond_init(&q->cv, NULL);
+    thread_mutex_init(&q->mutex);
+    thread_cond_init(&q->cv);
     q->count = 0;
 
     return q;

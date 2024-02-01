@@ -1,7 +1,7 @@
 BIN_DIR = ./bin
 CFLAGS = -O -Wall -Werror -pthread
 
-main: main.c queue.c
+main: main.c queue.c threads.c
 	@mkdir -p $(BIN_DIR)
 	@gcc $(CFLAGS) $^ -o $(BIN_DIR)/$@
 
