@@ -8,7 +8,7 @@
 
 typedef struct
 {
-    void *elem[Q_DEFAULT_SIZE];
+    int elem[Q_DEFAULT_SIZE];
     unsigned int front;
     unsigned int rear;
     unsigned int count;
@@ -26,10 +26,10 @@ bool
 is_queue_full(queue_t *q);
 
 bool
-enqueue(queue_t *q, void *ptr);
+enqueue(queue_t *q, int elem);
 
-void *
-dequeue(queue_t *q);
+int
+dequeue(queue_t *q, int *result);
 
 void
 print_queue(queue_t *q);

@@ -41,9 +41,9 @@ is_queue_full(queue_t *q)
 }
 
 bool
-enqueue(queue_t *q, void *ptr)
+enqueue(queue_t *q, int elem)
 {
-    if(!q || !ptr)
+    if(!q)
     {
         return false;
     }
@@ -56,7 +56,7 @@ enqueue(queue_t *q, void *ptr)
 
     if(is_queue_empty(q))
     {
-        q->elem[q->front] = ptr;
+        q->elem[q->front] = elem;
         q->count++;
         return true;
     }
@@ -64,54 +64,49 @@ enqueue(queue_t *q, void *ptr)
     /* rear can overflow, so make circular */
     q->rear = (q->rear + 1) % Q_DEFAULT_SIZE;
 
-    q->elem[q->rear] = ptr;
+    q->elem[q->rear] = elem;
     q->count++;
 
     return true;
 }
 
-void *
-dequeue(queue_t *q)
+int
+dequeue(queue_t *q, int *result)
 {
-    void *elem = NULL;
-
-    if(!q)
+    if(!q || !result)
     {
-        return NULL;
+        return 1;
     }
 
     if(is_queue_empty(q))
     {
-        return NULL;
+        return 2;
     }
 
-    elem = q->elem[q->front];
-    q->elem[q->front] = NULL;
+    *result = q->elem[q->front];
     q->count--;
 
     /* last element */
     if(q->front == q->rear)
     {
-        return elem;
+        return 0;
     }
 
     /* front can overflow, so make circular */
     q->front = (q->front + 1) % Q_DEFAULT_SIZE;
 
-    return elem;
+    return 0;
 }
 
 void
 print_queue(queue_t *q)
 {
+    int index;
     printf("q->front = %d, q->rear = %d, q->count = %d\n", q->front, q->rear, q->count);
 
-    for(int i = 0; i < Q_DEFAULT_SIZE; i++)
+    for(int i = 0; i < q->count; i++)
     {
-        if(q->elem[i] == NULL)
-        {
-            continue;
-        }
-        printf("index = %u, elem = %p\n", i, q->elem[i]);
+        index = (i + q->front) % Q_DEFAULT_SIZE;
+        printf("index = %d, elem = %d\n", index, q->elem[index]);
     }
 }

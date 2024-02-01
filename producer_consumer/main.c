@@ -1,6 +1,7 @@
 #include <pthread.h>
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
 #include "threads.h"
 #include "queue.h"
 
@@ -36,11 +37,12 @@ prod_fn(void *arg)
     while(!is_queue_full(q))
     {
         number = get_number();
-        enqueue(q, (void *)number);
+        enqueue(q, number);
         printf("%s: Pushed integer %ld in queue, queue size = %d\n", th_name, number, q->count);
     }
 
     printf("%s: Filled up the queue, signalling and releasing lock\n", th_name);
+    print_queue(q);
     thread_cond_broadcast(&q->cv);
     thread_mutex_unlock(&q->mutex);
 
@@ -69,7 +71,11 @@ cons_fn(void *arg)
 
     while(!is_queue_empty(q))
     {
-        number = (size_t)dequeue(q);
+        if(dequeue(q, &number))
+        {
+            fprintf(stderr, "Error in dequeue\n");
+            exit(EXIT_FAILURE);
+        }
         printf("%s: Consumes an integer %d, queue size = %d\n", th_name, number, q->count);
     }
 
@@ -87,22 +93,28 @@ main(int argc, char **argv)
 {
     const char *prod1 = "TP1";
     const char *prod2 = "TP2";
+    const char *prod3 = "TP3";
     const char *cons1 = "TC1";
     const char *cons2 = "TC2";
-    pthread_t prod_th1, prod_th2;
-    pthread_t cons_th1, cons_th2;
+    const char *cons3 = "TC3";
+    pthread_t prod_th1, prod_th2, prod_th3;
+    pthread_t cons_th1, cons_th2, cons_th3;
 
     q = init_queue();
 
     thread_create(&prod_th1, prod_fn, prod1);
     thread_create(&prod_th2, prod_fn, prod2);
+    thread_create(&prod_th3, prod_fn, prod3);
     thread_create(&cons_th1, cons_fn, cons1);
     thread_create(&cons_th2, cons_fn, cons2);
+    thread_create(&cons_th3, cons_fn, cons3);
 
     thread_join(prod_th1);
     thread_join(prod_th2);
+    thread_join(prod_th3);
     thread_join(cons_th1);
     thread_join(cons_th2);
+    thread_join(cons_th3);
 
     printf("Program Finished\n");
 
