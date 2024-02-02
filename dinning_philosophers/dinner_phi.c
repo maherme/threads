@@ -54,11 +54,12 @@ phi_locks_spoon(philosopher_t *phil, spoon_t *spoon)
 }
 
 static void
-phi_get_spoon(philosopher_t *phil, spoon_t *spoon)
+phi_grab_spoon(philosopher_t *phil, spoon_t *spoon)
 {
     printf("Philosopher %d finds spoon %d available\n", phil->phil_id, spoon->spoon_id);
     spoon->is_used = true;
     spoon->phil = phil;
+    thread_mutex_unlock(&spoon->mutex);
 }
 
 static void
@@ -69,6 +70,34 @@ phi_drop_spoon(philosopher_t *phil, spoon_t *spoon)
     spoon->is_used = false;
     spoon->phil = NULL;
     printf("Philosopher %d release spoon %d\n", phil->phil_id, spoon->spoon_id);
+}
+
+static void
+phi_wait_spoon(philosopher_t *phil, spoon_t *spoon)
+{
+    phi_locks_spoon(phil, spoon);
+
+    while(spoon->is_used && (phil != spoon->phil))
+    {
+        printf("Philosopher %d blocks himself, spoon %d is already in use\n",
+               phil->phil_id, spoon->spoon_id);
+        thread_cond_wait(&spoon->cv, &spoon->mutex);
+        printf("Philosopher %d wakes up, checking the spoon %d again\n",
+               phil->phil_id, spoon->spoon_id);
+    }
+}
+
+static bool
+phi_check_spoon_available(philosopher_t *phil, spoon_t *spoon)
+{
+    phi_locks_spoon(phil, spoon);
+
+    if(!spoon->is_used)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 static void
@@ -92,49 +121,50 @@ phil_release_both_spoons(philosopher_t *phil)
 }
 
 static bool
+phil_release_spoons(philosopher_t *phil, spoon_t *busy_spoon, spoon_t *owned_spoon)
+{
+    if(phil != busy_spoon->phil)
+    {
+        printf("Philosopher %d finds spoon %d is already used by philosopher %d, releasing spoon %d\n",
+               phil->phil_id, busy_spoon->spoon_id, busy_spoon->phil->phil_id, owned_spoon->spoon_id);
+        thread_mutex_lock(&owned_spoon->mutex);
+        phi_drop_spoon(phil, owned_spoon);
+        thread_mutex_unlock(&owned_spoon->mutex);
+        thread_mutex_unlock(&busy_spoon->mutex);
+        return false;
+    }
+    else
+    {
+        printf("Philosopher %d already has spoon %d\n", phil->phil_id, busy_spoon->spoon_id);
+        thread_mutex_unlock(&busy_spoon->mutex);
+        return true;
+    }
+}
+
+static bool
 phil_get_access_both_spoons(philosopher_t *phil)
 {
     spoon_t *left_spoon = phil_get_left_spoon(phil);
     spoon_t *right_spoon = phil_get_right_spoon(phil);
 
-    phi_locks_spoon(phil, left_spoon);
+    phi_wait_spoon(phil, left_spoon);
+    phi_grab_spoon(phil, left_spoon);
 
-    while(left_spoon->is_used && (phil != left_spoon->phil))
+    if(phi_check_spoon_available(phil, right_spoon))
     {
-        printf("Philosopher %d blocks himself, spoon %d is already in use\n",
-               phil->phil_id, left_spoon->spoon_id);
-        thread_cond_wait(&left_spoon->cv, &left_spoon->mutex);
-        printf("Philosopher %d wakes up, checking the spoon %d again\n",
-               phil->phil_id, left_spoon->spoon_id);
-    }
-
-    phi_get_spoon(phil, left_spoon);
-    thread_mutex_unlock(&left_spoon->mutex);
-
-    phi_locks_spoon(phil, right_spoon);
-
-    if(!right_spoon->is_used)
-    {
-        phi_get_spoon(phil, right_spoon);
-        thread_mutex_unlock(&right_spoon->mutex);
+        phi_grab_spoon(phil, right_spoon);
         return true;
-    }
-
-    if(phil != right_spoon->phil)
-    {
-        printf("Philosopher %d finds spoon %d is already used by philosopher %d, releasing spoon %d\n",
-               phil->phil_id, right_spoon->spoon_id, right_spoon->phil->phil_id, left_spoon->spoon_id);
-        thread_mutex_lock(&left_spoon->mutex);
-        phi_drop_spoon(phil, left_spoon);
-        thread_mutex_unlock(&left_spoon->mutex);
-        thread_mutex_unlock(&right_spoon->mutex);
-        return false;
     }
     else
     {
-        printf("Philosopher %d already has spoon %d\n", phil->phil_id, right_spoon->spoon_id);
-        thread_mutex_unlock(&right_spoon->mutex);
-        return true;
+        if(phil_release_spoons(phil, right_spoon, left_spoon))
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
     }
 
     /* This code should never be executed */
