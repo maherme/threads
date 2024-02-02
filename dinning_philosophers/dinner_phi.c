@@ -46,7 +46,7 @@ phil_eat(philosopher_t *phil)
 }
 
 static void
-phi_locks_spoon(philosopher_t *phil, spoon_t *spoon)
+phil_locks_spoon(philosopher_t *phil, spoon_t *spoon)
 {
     printf("Philosopher %d waiting to lock spoon %d\n", phil->phil_id, spoon->spoon_id);
     thread_mutex_lock(&spoon->mutex);
@@ -54,7 +54,7 @@ phi_locks_spoon(philosopher_t *phil, spoon_t *spoon)
 }
 
 static void
-phi_grab_spoon(philosopher_t *phil, spoon_t *spoon)
+phil_grab_spoon(philosopher_t *phil, spoon_t *spoon)
 {
     printf("Philosopher %d finds spoon %d available\n", phil->phil_id, spoon->spoon_id);
     spoon->is_used = true;
@@ -63,7 +63,7 @@ phi_grab_spoon(philosopher_t *phil, spoon_t *spoon)
 }
 
 static void
-phi_drop_spoon(philosopher_t *phil, spoon_t *spoon)
+phil_drop_spoon(philosopher_t *phil, spoon_t *spoon)
 {
     assert(true == spoon->is_used);
     assert(phil == spoon->phil);
@@ -73,9 +73,9 @@ phi_drop_spoon(philosopher_t *phil, spoon_t *spoon)
 }
 
 static void
-phi_wait_spoon(philosopher_t *phil, spoon_t *spoon)
+phil_wait_spoon(philosopher_t *phil, spoon_t *spoon)
 {
-    phi_locks_spoon(phil, spoon);
+    phil_locks_spoon(phil, spoon);
 
     while(spoon->is_used && (phil != spoon->phil))
     {
@@ -88,9 +88,9 @@ phi_wait_spoon(philosopher_t *phil, spoon_t *spoon)
 }
 
 static bool
-phi_check_spoon_available(philosopher_t *phil, spoon_t *spoon)
+phil_check_spoon_available(philosopher_t *phil, spoon_t *spoon)
 {
-    phi_locks_spoon(phil, spoon);
+    phil_locks_spoon(phil, spoon);
 
     if(!spoon->is_used)
     {
@@ -106,39 +106,47 @@ phil_release_both_spoons(philosopher_t *phil)
     spoon_t *left_spoon = phil_get_left_spoon(phil);
     spoon_t *right_spoon = phil_get_right_spoon(phil);
 
-    phi_locks_spoon(phil, left_spoon);
-    phi_locks_spoon(phil, right_spoon);
+    phil_locks_spoon(phil, left_spoon);
+    phil_locks_spoon(phil, right_spoon);
 
-    phi_drop_spoon(phil, left_spoon);
+    phil_drop_spoon(phil, left_spoon);
     printf("Philosopher %d signalling and releasing spoon %d\n", phil->phil_id, left_spoon->spoon_id);
     thread_cond_signal(&left_spoon->cv);
     thread_mutex_unlock(&left_spoon->mutex);
 
-    phi_drop_spoon(phil, right_spoon);
+    phil_drop_spoon(phil, right_spoon);
     printf("Philosopher %d signalling and releasing spoon %d\n", phil->phil_id, right_spoon->spoon_id);
     thread_cond_signal(&right_spoon->cv);
     thread_mutex_unlock(&right_spoon->mutex);
 }
 
 static bool
-phil_release_spoons(philosopher_t *phil, spoon_t *busy_spoon, spoon_t *owned_spoon)
+is_spoon_owned_by_phil(philosopher_t *phil, spoon_t *spoon)
 {
-    if(phil != busy_spoon->phil)
+    if(phil != spoon->phil)
     {
-        printf("Philosopher %d finds spoon %d is already used by philosopher %d, releasing spoon %d\n",
-               phil->phil_id, busy_spoon->spoon_id, busy_spoon->phil->phil_id, owned_spoon->spoon_id);
-        thread_mutex_lock(&owned_spoon->mutex);
-        phi_drop_spoon(phil, owned_spoon);
-        thread_mutex_unlock(&owned_spoon->mutex);
-        thread_mutex_unlock(&busy_spoon->mutex);
         return false;
     }
-    else
-    {
-        printf("Philosopher %d already has spoon %d\n", phil->phil_id, busy_spoon->spoon_id);
-        thread_mutex_unlock(&busy_spoon->mutex);
-        return true;
-    }
+
+    return true;
+}
+
+static void
+phil_giveup_spoons(philosopher_t *phil, spoon_t *busy_spoon, spoon_t *owned_spoon)
+{
+    printf("Philosopher %d finds spoon %d is already used by philosopher %d, releasing spoon %d\n",
+           phil->phil_id, busy_spoon->spoon_id, busy_spoon->phil->phil_id, owned_spoon->spoon_id);
+    thread_mutex_lock(&owned_spoon->mutex);
+    phil_drop_spoon(phil, owned_spoon);
+    thread_mutex_unlock(&owned_spoon->mutex);
+    thread_mutex_unlock(&busy_spoon->mutex);
+}
+
+static void
+phil_already_owned_spoon(philosopher_t *phil, spoon_t *spoon)
+{
+    printf("Philosopher %d already has spoon %d\n", phil->phil_id, spoon->spoon_id);
+    thread_mutex_unlock(&spoon->mutex);
 }
 
 static bool
@@ -147,24 +155,24 @@ phil_get_access_both_spoons(philosopher_t *phil)
     spoon_t *left_spoon = phil_get_left_spoon(phil);
     spoon_t *right_spoon = phil_get_right_spoon(phil);
 
-    phi_wait_spoon(phil, left_spoon);
-    phi_grab_spoon(phil, left_spoon);
+    phil_wait_spoon(phil, left_spoon);
+    phil_grab_spoon(phil, left_spoon);
 
-    if(phi_check_spoon_available(phil, right_spoon))
+    if(phil_check_spoon_available(phil, right_spoon))
     {
-        phi_grab_spoon(phil, right_spoon);
+        phil_grab_spoon(phil, right_spoon);
+        return true;
+    }
+
+    if(is_spoon_owned_by_phil(phil, right_spoon))
+    {
+        phil_already_owned_spoon(phil, right_spoon);
         return true;
     }
     else
     {
-        if(phil_release_spoons(phil, right_spoon, left_spoon))
-        {
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        phil_giveup_spoons(phil, right_spoon, left_spoon);
+        return false;
     }
 
     /* This code should never be executed */
