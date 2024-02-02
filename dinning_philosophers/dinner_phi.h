@@ -20,4 +20,13 @@ typedef struct
     pthread_cond_t cv;
 }spoon_t;
 
+void
+spoons_init(void);
+
+void
+philosophers_init(void);
+
+void
+philosophers_create(void);
+
 #endif /* DINNER_PHY_H */
