@@ -56,7 +56,7 @@ rw_lock_rd_lock(rw_lock_t *rw_lock)
     }
 
     /* rw_lock is locked by writer */
-    if(rw_lock->is_locked_by_writer)
+    while(rw_lock->is_locked_by_writer)
     {
         assert(rw_lock->n_locks == 1);
         assert(!rw_lock->is_locked_by_reader);
@@ -128,6 +128,7 @@ rw_lock_wr_lock(rw_lock_t *rw_lock)
     assert(!rw_lock->is_locked_by_writer);
     assert(0 == rw_lock->n_locks);
     assert(!rw_lock->writer_thread);
+    rw_lock->is_locked_by_writer = true;
     rw_lock->n_locks++;
     rw_lock->writer_thread = pthread_self();
     thread_mutex_unlock(&rw_lock->state_mutex);
@@ -179,5 +180,8 @@ rw_lock_unlock(rw_lock_t *rw_lock)
         }
         rw_lock->is_locked_by_reader = false;
         thread_mutex_unlock(&rw_lock->state_mutex);
+        return;
     }
+
+    assert(0);
 }
