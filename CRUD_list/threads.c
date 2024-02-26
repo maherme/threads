@@ -23,7 +23,7 @@ thread_create(pthread_t *pthread_handle, void *(*start_routine)(void *), const v
         handle_error_en(s, "pthread_attr_init");
     }
 
-    s = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+    s = pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     if(0 != s)
     {
         handle_error_en(s, "pthread_attr_setdetachstate");

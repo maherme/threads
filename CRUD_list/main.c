@@ -8,7 +8,17 @@
 #define MAX_ROLL_NO 10
 #define INCR        5
 
+enum {
+    READER_TH,
+    UPDATE_TH,
+    CREATE_TH,
+    DELETE_TH,
+    THREAD_TYPE_MAX
+} thread_type_t;
+
 static student_list_t student_list;
+static int loop_count[THREAD_TYPE_MAX];
+static pthread_t threads[THREAD_TYPE_MAX];
 
 static void *
 reader_fn(void *arg)
@@ -19,6 +29,8 @@ reader_fn(void *arg)
 
     while(1)
     {
+        loop_count[READER_TH]++;
+
         roll_no = rand()%MAX_ROLL_NO;
         thread_rwlock_rdlock(&student_list.rw_lock);
         student = student_list_lookup(&student_list, roll_no);
@@ -59,6 +71,8 @@ update_fn(void *arg)
 
     while(1)
     {
+        loop_count[UPDATE_TH]++;
+
         roll_no = rand()%MAX_ROLL_NO;
         thread_rwlock_rdlock(&student_list.rw_lock);
         student = student_list_lookup(&student_list, roll_no);
@@ -107,6 +121,8 @@ create_fn(void *arg)
 
     while(1)
     {
+        loop_count[CREATE_TH]++;
+
         roll_no = rand()%MAX_ROLL_NO;
         thread_rwlock_wrlock(&student_list.rw_lock);
         student = student_list_lookup(&student_list, roll_no);
@@ -114,6 +130,7 @@ create_fn(void *arg)
         if(student)
         {
             printf("CREATE TH: Roll No %d creation failed, already exist\n", roll_no);
+            thread_rwlock_unlock(&student_list.rw_lock);
             continue;
         }
 
@@ -136,6 +153,8 @@ delete_fn(void *arg)
 
     while(1)
     {
+        loop_count[DELETE_TH]++;
+
         roll_no = rand()%MAX_ROLL_NO;
         thread_rwlock_wrlock(&student_list.rw_lock);
         student = student_list_remove(&student_list, roll_no);
@@ -169,5 +188,17 @@ delete_fn(void *arg)
 int
 main()
 {
+    student_list.list = init_singly_ll();
+    thread_rwlock_init(&student_list.rw_lock);
+
+    for(int i = 0; i < THREAD_TYPE_MAX; i++)
+        loop_count[i] = 0;
+
+    thread_create(&threads[READER_TH], reader_fn, NULL);
+    thread_create(&threads[UPDATE_TH], update_fn, NULL);
+    thread_create(&threads[CREATE_TH], create_fn, NULL);
+    thread_create(&threads[DELETE_TH], delete_fn, NULL);
+
+    pthread_exit(NULL);
     exit(EXIT_SUCCESS);
 }
