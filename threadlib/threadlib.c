@@ -401,7 +401,7 @@ static void
 run_thread_in_pool(thread_t *thread)
 {
     assert(is_glthread_node_unlink(&thread->glnode));
-    if(thread->thread_created)
+    if(!thread->thread_created)
     {
         thread_run(thread, thread->thread_fn, thread->arg);
     }

@@ -31,8 +31,20 @@ glthread_add(glthread_t *list, glthread_node_t *glnode)
 static void
 glthread_remove_node(glthread_node_t *glnode)
 {
+    /* Check if the node is the first one in the list */
+    if(!glnode->previous)
+    {
+        /* Check if the node is not the onlyone in the list */
+        if(glnode->next)
+        {
+            glnode->next->previous = NULL;
+            glnode->next = NULL;
+        }
+        return;
+    }
+
     /* Check if the node is the last node in the list */
-    if(glnode->next == NULL)
+    if(!glnode->next)
     {
         glnode->previous->next = NULL;
         glnode->previous = NULL;
