@@ -4,8 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <assert.h>
 #include "threadlib.h"
 #include "bitsop.h"
+#include "glthreads.h"
 
 #define handle_error_en(en, msg) \
         do { errno = en; perror(msg); exit(EXIT_FAILURE); } while (0)
@@ -287,6 +289,7 @@ thread_init(thread_t *thread, char *name)
     thread->arg = NULL;
     thread->thread_fn = NULL;
     thread_attr_init(&thread->attributes);
+    glthread_node_init(&thread->glnode);
     return thread;
 }
 
@@ -343,4 +346,121 @@ thread_test_and_pause(thread_t *thread)
         (thread->thread_pause_fn)(thread->pause_arg);
     }
     thread_mutex_unlock(&thread->state_mutex);
+}
+
+void
+thread_pool_init(thread_pool_t *thread_pool)
+{
+    glthread_init(&thread_pool->pool_list, offsetof(thread_t, glnode));
+    thread_mutex_init(&thread_pool->mutex);
+}
+
+void
+thread_pool_insert_new_thread(thread_pool_t *thread_pool, thread_t *thread)
+{
+    thread_mutex_lock(&thread_pool->mutex);
+    assert(is_glthread_node_unlink(&thread->glnode));
+    assert(!thread->thread_fn);
+    glthread_add(&thread_pool->pool_list, &thread->glnode);
+    thread_mutex_unlock(&thread_pool->mutex);
+}
+
+static inline thread_t *
+get_thread_from_pool(glthread_node_t *glnode)
+{
+    return (thread_t *)((char *)glnode - (char *)&(((thread_t *)0)->glnode));
+}
+
+thread_t *
+thread_pool_get_thread(thread_pool_t *thread_pool)
+{
+    thread_t *thread;
+    glthread_node_t *head;
+    thread_mutex_lock(&thread_pool->mutex);
+    if(!(head = thread_pool->pool_list.head))
+    {
+        thread_mutex_unlock(&thread_pool->mutex);
+        return NULL;
+    }
+    thread = get_thread_from_pool(head);
+    glthread_remove(&thread_pool->pool_list, head);
+    thread_mutex_unlock(&thread_pool->mutex);
+    return thread;
+}
+
+static void
+park_thread_in_pool(thread_pool_t *thread_pool, thread_t *thread)
+{
+    thread_mutex_lock(&thread_pool->mutex);
+    glthread_add(&thread_pool->pool_list, &thread->glnode);
+    thread_cond_wait(&thread->cv, &thread_pool->mutex);
+    thread_mutex_unlock(&thread_pool->mutex);
+}
+
+static void
+run_thread_in_pool(thread_t *thread)
+{
+    assert(is_glthread_node_unlink(&thread->glnode));
+    if(thread->thread_created)
+    {
+        thread_run(thread, thread->thread_fn, thread->arg);
+    }
+    else
+    {
+        thread_cond_signal(&thread->cv);
+    }
+}
+
+typedef struct
+{
+    void *(*thread_app_fn)(void *);
+    void *app_arg;
+    void (*thread_park_fn)(thread_pool_t *, thread_t *);
+    thread_pool_t *thread_pool;
+    thread_t *thread;
+}thread_execution_data_t;
+
+static void *
+thread_fn_execute_app_and_park(void *arg)
+{
+    thread_execution_data_t *th_execution_data = (thread_execution_data_t *)arg;
+
+    while(1)
+    {
+        th_execution_data->thread_app_fn(th_execution_data->app_arg);
+        th_execution_data->thread_park_fn(th_execution_data->thread_pool, th_execution_data->thread);
+    }
+
+    return NULL;
+}
+
+void
+thread_pool_dispatch_thread(thread_pool_t *thread_pool, void *(*thread_fn)(void *), void *arg)
+{
+    thread_t *thread = thread_pool_get_thread(thread_pool);
+    if(!thread)
+    {
+        return;
+    }
+
+    thread_execution_data_t *thread_execution_data = (thread_execution_data_t *)(thread->arg);
+    if(!thread_execution_data)
+    {
+        thread_execution_data = calloc(1, sizeof(thread_execution_data_t));
+    }
+    if(!thread_execution_data)
+    {
+        handle_error("calloc");
+    }
+
+    thread_execution_data->thread_app_fn = thread_fn;
+    thread_execution_data->app_arg = arg;
+    thread_execution_data->thread_park_fn = park_thread_in_pool;
+    thread_execution_data->thread_pool = thread_pool;
+    thread_execution_data->thread = thread;
+
+    thread->thread_fn = thread_fn_execute_app_and_park;
+    thread->arg = (void *)thread_execution_data;
+
+    run_thread_in_pool(thread);
 }

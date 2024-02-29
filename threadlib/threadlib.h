@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include <semaphore.h>
+#include "glthreads.h"
 
 /**
  * @defgroup Thread_State Thread possible states
@@ -31,7 +32,14 @@ typedef struct
     unsigned int flags;                 /**< @brief for tracking thread state */
     pthread_mutex_t state_mutex;        /**< @brief update thread state mutually exclusively */
     pthread_cond_t cv;                  /**< @brief cv on which thread will be blocked itself */
+    glthread_node_t glnode;             /**< @brief struct node of the pool thread glued list */
 }thread_t;
+
+typedef struct
+{
+    glthread_t pool_list;
+    pthread_mutex_t mutex;
+}thread_pool_t;
 
 /**********************************************************************************************************/
 /*                                      Basic APIs                                                        */
@@ -127,5 +135,17 @@ thread_resume(thread_t *thread);
 
 void
 thread_test_and_pause(thread_t *thread);
+
+void
+thread_pool_init(thread_pool_t *thread_pool);
+
+void
+thread_pool_insert_new_thread(thread_pool_t *thread_pool, thread_t *thread);
+
+thread_t *
+thread_pool_get_thread(thread_pool_t *thread_pool);
+
+void
+thread_pool_dispatch_thread(thread_pool_t *thread_pool, void *(*thread_fn)(void *), void *arg);
 
 #endif /* THREADLIB_H */
