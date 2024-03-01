@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "thread_barrier.h"
-#include "threads.h"
+#include "threadlib.h"
 
 #define NUMBER_THREADS  3
 
@@ -28,12 +28,15 @@ main()
 {
     static const char *threads_id[NUMBER_THREADS] = {"th1", "th2", "th3"};
     static pthread_t pthreads[NUMBER_THREADS];
+    pthread_attr_t attr;
 
     thread_barrier_init(&thread_barrier, NUMBER_THREADS);
 
+    thread_attr_init(&attr);
+    thread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
     for(int i = 0; i < NUMBER_THREADS; i++)
     {
-        thread_create(&pthreads[i], fn_callback, (void*)threads_id[i]);
+        thread_create(&pthreads[i], &attr, fn_callback, (void*)threads_id[i]);
     }
 
     for(int i = 0; i < NUMBER_THREADS; i++)
@@ -42,5 +45,6 @@ main()
     }
 
     thread_barrier_print(&thread_barrier);
+    thread_barrier_destroy(&thread_barrier);
     exit(EXIT_SUCCESS);
 }

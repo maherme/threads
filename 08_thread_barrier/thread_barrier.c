@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "thread_barrier.h"
-#include "threads.h"
+#include "threadlib.h"
 
 void
 thread_barrier_init(thread_barrier_t *barrier, unsigned int threshold_count)
@@ -50,9 +50,24 @@ thread_barrier_wait(thread_barrier_t *barrier)
 }
 
 void
+thread_barrier_signal_all(thread_barrier_t *barrier)
+{
+    thread_mutex_lock(&barrier->mutex);
+    if(!barrier->is_ready_again && 0 == barrier->current_wait_count)
+    {
+        thread_mutex_unlock(&barrier->mutex);
+        return;
+    }
+    thread_cond_signal(&barrier->cv);
+    thread_mutex_unlock(&barrier->mutex);
+}
+
+void
 thread_barrier_destroy(thread_barrier_t *barrier)
 {
-    (void)barrier;
+    thread_mutex_destroy(&barrier->mutex);
+    thread_cond_destroy(&barrier->cv);
+    thread_cond_destroy(&barrier->busy_cv);
 }
 
 void

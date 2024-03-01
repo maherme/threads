@@ -21,6 +21,9 @@ void
 thread_barrier_wait(thread_barrier_t *barrier);
 
 void
+thread_barrier_signal_all(thread_barrier_t *barrier);
+
+void
 thread_barrier_destroy(thread_barrier_t *barrier);
 
 void
