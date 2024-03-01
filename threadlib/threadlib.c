@@ -1,4 +1,5 @@
 #include <pthread.h>
+#include <semaphore.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -268,6 +269,42 @@ thread_rwlock_destroy(pthread_rwlock_t *rw_lock)
     }
 }
 
+void
+semaphore_init(sem_t *sem, int pshared, unsigned int value)
+{
+    if(-1 == sem_init(sem, pshared, value))
+    {
+        handle_error("sem_init");
+    }
+}
+
+void
+semaphore_destroy(sem_t *sem)
+{
+    if(-1 == sem_destroy(sem))
+    {
+        handle_error("sem_destroy");
+    }
+}
+
+void
+semaphore_wait(sem_t *sem)
+{
+    if(-1 == sem_wait(sem))
+    {
+        handle_error("sem_wait");
+    }
+}
+
+void
+semaphore_post(sem_t *sem)
+{
+    if(-1 == sem_post(sem))
+    {
+        handle_error("sem_post");
+    }
+}
+
 /**********************************************************************************************************/
 /*                                      Complex APIs                                                      */
 /**********************************************************************************************************/
@@ -393,6 +430,12 @@ park_thread_in_pool(thread_pool_t *thread_pool, thread_t *thread)
 {
     thread_mutex_lock(&thread_pool->mutex);
     glthread_add(&thread_pool->pool_list, &thread->glnode);
+
+    if(thread->semaphore)
+    {
+        semaphore_post(thread->semaphore);
+    }
+
     thread_cond_wait(&thread->cv, &thread_pool->mutex);
     thread_mutex_unlock(&thread_pool->mutex);
 }
@@ -435,12 +478,25 @@ thread_fn_execute_app_and_park(void *arg)
 }
 
 void
-thread_pool_dispatch_thread(thread_pool_t *thread_pool, void *(*thread_fn)(void *), void *arg)
+thread_pool_dispatch_thread(thread_pool_t *thread_pool,
+                            void *(*thread_fn)(void *),
+                            void *arg,
+                            bool block_caller)
 {
     thread_t *thread = thread_pool_get_thread(thread_pool);
     if(!thread)
     {
         return;
+    }
+
+    if(block_caller && !thread->semaphore)
+    {
+        thread->semaphore = calloc(1, sizeof(sem_t));
+        if(!thread->semaphore)
+        {
+            handle_error("calloc");
+        }
+        semaphore_init(thread->semaphore, 0, 0);
     }
 
     thread_execution_data_t *thread_execution_data = (thread_execution_data_t *)(thread->arg);
@@ -463,4 +519,12 @@ thread_pool_dispatch_thread(thread_pool_t *thread_pool, void *(*thread_fn)(void 
     thread->arg = (void *)thread_execution_data;
 
     run_thread_in_pool(thread);
+
+    if(block_caller)
+    {
+        semaphore_wait(thread->semaphore);
+        semaphore_destroy(thread->semaphore);
+        free(thread->semaphore);
+        thread->semaphore = NULL;
+    }
 }

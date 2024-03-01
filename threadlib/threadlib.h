@@ -32,6 +32,7 @@ typedef struct
     unsigned int flags;                 /**< @brief for tracking thread state */
     pthread_mutex_t state_mutex;        /**< @brief update thread state mutually exclusively */
     pthread_cond_t cv;                  /**< @brief cv on which thread will be blocked itself */
+    sem_t *semaphore;
     glthread_node_t glnode;             /**< @brief struct node of the pool thread glued list */
 }thread_t;
 
@@ -114,6 +115,18 @@ thread_rwlock_unlock(pthread_rwlock_t *rw_lock);
 void
 thread_rwlock_destroy(pthread_rwlock_t *rw_lock);
 
+void
+semaphore_init(sem_t *sem, int pshared, unsigned int value);
+
+void
+semaphore_destroy(sem_t *sem);
+
+void
+semaphore_wait(sem_t *sem);
+
+void
+semaphore_post(sem_t *sem);
+
 /**********************************************************************************************************/
 /*                                      Complex APIs                                                      */
 /**********************************************************************************************************/
@@ -146,6 +159,9 @@ thread_t *
 thread_pool_get_thread(thread_pool_t *thread_pool);
 
 void
-thread_pool_dispatch_thread(thread_pool_t *thread_pool, void *(*thread_fn)(void *), void *arg);
+thread_pool_dispatch_thread(thread_pool_t *thread_pool,
+                            void *(*thread_fn)(void *),
+                            void *arg,
+                            bool block_caller);
 
 #endif /* THREADLIB_H */
