@@ -42,6 +42,16 @@ typedef struct
     pthread_mutex_t mutex;
 }thread_pool_t;
 
+typedef struct
+{
+    int thread_wait_count;          /**< @brief number of threads waiting in a wait queue */
+    pthread_cond_t cv;              /**< @brief cv on which threads in wait queue are blocked */
+    pthread_mutex_t *app_mutex;     /**< @brief application owned mutex cached by wait queue */
+}wait_queue_t;
+
+/** @brief Pointer to condition function for wait queue */
+typedef bool (*wait_queue_cond_fn) (void *app_arg, pthread_mutex_t **out_mutex);
+
 /**********************************************************************************************************/
 /*                                      Basic APIs                                                        */
 /**********************************************************************************************************/
@@ -163,5 +173,20 @@ thread_pool_dispatch_thread(thread_pool_t *thread_pool,
                             void *(*thread_fn)(void *),
                             void *arg,
                             bool block_caller);
+
+void
+wait_queue_init(wait_queue_t *wq);
+
+thread_t *
+wait_queue_test_and_wait(wait_queue_t *wq, wait_queue_cond_fn wait_queue_cond_fn_cb, void *arg);
+
+void
+wait_queue_signal(wait_queue_t *wq, bool lock_mutex);
+
+void
+wait_queue_broadcast(wait_queue_t *wq, bool lock_mutex);
+
+void
+wait_queue_destroy(wait_queue_t *wq);
 
 #endif /* THREADLIB_H */

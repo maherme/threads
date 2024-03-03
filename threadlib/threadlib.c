@@ -528,3 +528,79 @@ thread_pool_dispatch_thread(thread_pool_t *thread_pool,
         thread->semaphore = NULL;
     }
 }
+
+void
+wait_queue_init(wait_queue_t *wq)
+{
+    wq->thread_wait_count = 0;
+    thread_cond_init(&wq->cv);
+    wq->app_mutex = NULL;
+}
+
+thread_t *
+wait_queue_test_and_wait(wait_queue_t *wq, wait_queue_cond_fn wait_queue_cond_fn_cb, void *arg)
+{
+    pthread_mutex_t *locked_app_mutex = NULL;
+    bool should_block = wait_queue_cond_fn_cb(arg, &locked_app_mutex);
+
+    wq->app_mutex = locked_app_mutex;
+
+    while(should_block)
+    {
+        wq->thread_wait_count++;
+        thread_cond_wait(&wq->cv, wq->app_mutex);
+        wq->thread_wait_count--;
+        should_block = wait_queue_cond_fn_cb(arg, NULL);
+    }
+
+    return NULL;
+}
+
+void
+wait_queue_signal(wait_queue_t *wq, bool lock_mutex)
+{
+    if(!wq->app_mutex) return;
+
+    if(lock_mutex) thread_mutex_lock(wq->app_mutex);
+
+    if(!wq->thread_wait_count)
+    {
+        if(lock_mutex)
+        {
+            thread_mutex_unlock(wq->app_mutex);
+            return;
+        }
+    }
+
+    thread_cond_signal(&wq->cv);
+
+    if(lock_mutex) thread_mutex_unlock(wq->app_mutex);
+}
+
+void
+wait_queue_broadcast(wait_queue_t *wq, bool lock_mutex)
+{
+    if(!wq->app_mutex) return;
+
+    if(lock_mutex) thread_mutex_lock(wq->app_mutex);
+
+    if(!wq->thread_wait_count)
+    {
+        if(lock_mutex)
+        {
+            thread_mutex_unlock(wq->app_mutex);
+            return;
+        }
+    }
+
+    thread_cond_broadcast(&wq->cv);
+
+    if(lock_mutex) thread_mutex_unlock(wq->app_mutex);
+}
+
+void
+wait_queue_destroy(wait_queue_t *wq)
+{
+    thread_cond_destroy(&wq->cv);
+    wq->app_mutex = NULL;
+}
